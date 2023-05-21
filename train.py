@@ -21,6 +21,7 @@ from model.utils.general import one_cycle
 
 from val import evaluate
 
+
 def set_description(title, items):
     columns = title.split(" | ")
     desc_string = ""
@@ -78,22 +79,22 @@ def train(hyp, args, device):
     if cuda and rank == -1 and torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
 
-    # train, train_ds = create_dataloader(args.train,
-    #                                     batch_size=args.bs,
-    #                                     hyp=hyp,
-    #                                     augment=True,
-    #                                     rank=rank,
-    #                                     workers=workers)
+    train, _ = create_dataloader(args.train,
+                                        batch_size=args.bs,
+                                        hyp=hyp,
+                                        augment=True,
+                                        rank=rank,
+                                        workers=workers)
 
-    # number_batches = len(train)
+    number_batches = len(train)
 
-    # if rank in [-1, 0]:
-    train, _ = create_dataloader(args.val,
-                                 batch_size=args.bs,
-                                 hyp=hyp,
-                                 augment=False,
-                                 rank=rank,
-                                 workers=workers)
+    if rank in [-1, 0]:
+        test, _ = create_dataloader(args.val,
+                                    batch_size=args.bs,
+                                    hyp=hyp,
+                                    augment=False,
+                                    rank=rank,
+                                    workers=workers)
 
     number_batches = len(train)
 
@@ -127,40 +128,41 @@ def train(hyp, args, device):
         optimizer.zero_grad()
 
         for i, (imgs, targets) in pbar:
-            # intergrated_batches = i + number_batches * epoch
-            # imgs = imgs.to(device, non_blocking=True).float() / 255.0
-            #
-            # if intergrated_batches <= number_warmup_batches:
-            #     xi = [0, number_warmup_batches]
-            #     accumulate = max(1, np.interp(intergrated_batches, xi, [1, nominal_batch_size / batch_size]).round())
-            #     for j, x in enumerate(optimizer.param_groups):
-            #         x['lr'] = np.interp(intergrated_batches, xi,
-            #                             [hyp['warmup_bias_lr'] if j == 2 else 0.0, x['initial_lr'] * lf(epoch)])
-            #         if 'momentum' in x:
-            #             x['momentum'] = np.interp(intergrated_batches, xi,
-            #                                       [hyp['warmup_momentum'], hyp['momentum']])
-            #
-            # with amp.autocast(enabled=cuda):
-            #     pred = model(imgs)
-            #     loss, loss_items = compute_loss(pred, targets.to(device))
-            #
-            # scaler.scale(loss).backward()
-            #
-            # if intergrated_batches - last_opt_step >= accumulate:
-            #     scaler.step(optimizer)
-            #     scaler.update()
-            #     optimizer.zero_grad()
-            #     last_opt_step = intergrated_batches
-            #
-            # mean_loss = (mean_loss * i + loss_items) / (i + 1)
-            # memory_used = f'{torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0:.3g}GB'
-            # epochs_left = f'{epoch}/{epochs - 1}'
-            #
-            # pbar.set_description(set_description(title_string, [epochs_left, memory_used, f'{mean_loss[0].item():.4f}',
-            #                                                     f'{mean_loss[1].item():.4f}',
-            #                                                     f'{mean_loss[2].item():.4f}',
-            #                                                     f'{mean_loss[3].item():.4f}',
-            #                                                     targets.shape[0]]))
+            intergrated_batches = i + number_batches * epoch
+            imgs = imgs.to(device, non_blocking=True).float() / 255.0
+
+            if intergrated_batches <= number_warmup_batches:
+                xi = [0, number_warmup_batches]
+                accumulate = max(1, np.interp(intergrated_batches, xi, [1, nominal_batch_size / batch_size]).round())
+                for j, x in enumerate(optimizer.param_groups):
+                    x['lr'] = np.interp(intergrated_batches, xi,
+                                        [hyp['warmup_bias_lr'] if j == 2 else 0.0, x['initial_lr'] * lf(epoch)])
+                    if 'momentum' in x:
+                        x['momentum'] = np.interp(intergrated_batches, xi,
+                                                  [hyp['warmup_momentum'], hyp['momentum']])
+
+            with amp.autocast(enabled=cuda):
+                pred = model(imgs)
+                loss, loss_items = compute_loss(pred, targets.to(device))
+
+            scaler.scale(loss).backward()
+
+            if intergrated_batches - last_opt_step >= accumulate:
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad()
+                last_opt_step = intergrated_batches
+
+            mean_loss = (mean_loss * i + loss_items) / (i + 1)
+            memory_used = f'{torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0:.3g}GB'
+            epochs_left = f'{epoch}/{epochs - 1}'
+
+            pbar.set_description(set_description(title_string, [epochs_left, memory_used, f'{mean_loss[0].item():.4f}',
+                                                                f'{mean_loss[1].item():.4f}',
+                                                                f'{mean_loss[2].item():.4f}',
+                                                                f'{mean_loss[3].item():.4f}',
+                                                                targets.shape[0]]))
+            torch.save(model.state_dict(), save_dir / f"last_{epoch}.pt")
 
             results = evaluate(train, model, compute_loss, half_precision=True)
             torch.save(model.state_dict(), save_dir / f"loss_{(mean_loss.mean().item()):.4f}.pt")
