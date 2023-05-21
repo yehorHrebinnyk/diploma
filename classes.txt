@@ -1,0 +1,1 @@
+['long sleeve dress', 'long sleeve outwear', 'long sleeve top', 'short sleeve dress', 'short sleeve outwear', 'short sleeve top', 'shorts', 'skirt', 'sling', 'sling dress', 'trousers', 'vest', 'vest dress']
