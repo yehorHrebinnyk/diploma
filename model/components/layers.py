@@ -107,8 +107,8 @@ class IDetect(nn.Module):
         self.number_anchors = len(anchors[0]) // 2  # dividing by 2 because of x, y coordinates in one list
         self.grid = [torch.zeros(1)] * self.number_layers
         a = torch.tensor(anchors).float().view(self.number_layers, -1, 2)
-        self.anchors = a
-        self.anchors_grid = a.clone().view(self.number_layers, 1, -1, 1, 1, 2)
+        self.register_buffer('anchors', a)  # shape(nl,na,2)
+        self.register_buffer('anchors_grid', a.clone().view(self.number_layers, 1, -1, 1, 1, 2))  # shape(nl,1,na,1,1,2)
         self.conv_outputs = nn.ModuleList(nn.Conv2d(x, self.number_outputs * self.number_anchors, 1) for x in ch)
         self.ia = nn.ModuleList(ImplicitA(x) for x in ch)
         self.im = nn.ModuleList(ImplicitM(self.number_outputs * self.number_anchors) for _ in ch)

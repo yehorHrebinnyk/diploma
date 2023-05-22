@@ -49,6 +49,7 @@ class ComputeLoss:
             BCEcls, BCEobj = FocalLoss(BCEcls, gamma), FocalLoss(BCEobj, gamma)
 
         detect_layer = model.module.model[-1] if is_parallel(model) else model.model[-1]
+        print('testug', next(detect_layer.parameters()).device)
         self.balance = {3: [4.0, 1.0, 0.4]}.get(detect_layer.number_layers, [4.0, 1.0, 0.25, 0.06, .02])
         self.stride_index_16 = list(detect_layer.stride).index(16) if autobalance else 0
         self.BCEcls, self.BCEobj, self.gr, self.hyp, self.autobalance = BCEcls, BCEobj, 1.0, hyperparameters, autobalance
@@ -72,8 +73,8 @@ class ComputeLoss:
         for i in range(self.number_layers):
             anchors = self.anchors[i]
             grid_size[2:6] = torch.tensor(predicted[i].shape)[[3, 2, 3, 2]]
-
             grid_targets = targets * grid_size
+            
             if number_targets:
                 # erase true boxes which are too big or too small (relatively anchors)
                 ratio_of_anchors_and_true_boxes = grid_targets[:, :, 4:6] / anchors[:, None]

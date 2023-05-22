@@ -77,7 +77,7 @@ def train(hyp, args, device):
     scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lf)
 
     if cuda and rank == -1 and torch.cuda.device_count() > 1:
-        model = torch.nn.DataParallel(model)
+        model = torch.nn.DataParallel(model).to(device)
 
     train, _ = create_dataloader(args.train,
                                         batch_size=args.bs,
@@ -90,13 +90,12 @@ def train(hyp, args, device):
 
     if rank in [-1, 0]:
         test, _ = create_dataloader(args.val,
-                                    batch_size=args.bs,
-                                    hyp=hyp,
-                                    augment=False,
-                                    rank=rank,
-                                    workers=workers)
+                                batch_size=args.bs,
+                                hyp=hyp,
+                                augment=False,
+                                rank=rank,
+                                workers=workers)
 
-    number_batches = len(train)
 
     if cuda and rank != -1:
         model = DDP(model, device_ids=[args.local_rank], output_device=args.local_rank)
@@ -162,10 +161,12 @@ def train(hyp, args, device):
                                                                 f'{mean_loss[2].item():.4f}',
                                                                 f'{mean_loss[3].item():.4f}',
                                                                 targets.shape[0]]))
-            torch.save(model.state_dict(), save_dir / f"last_{epoch}.pt")
+        
+        
+        torch.save(model.state_dict(), save_dir / f"last_{epoch}.pt")
 
-            results = evaluate(train, model, compute_loss, half_precision=True)
-            torch.save(model.state_dict(), save_dir / f"loss_{(mean_loss.mean().item()):.4f}.pt")
+        results = evaluate(test, model, compute_loss, half_precision=True)
+        torch.save(model.state_dict(), save_dir / f"loss_{(mean_loss.mean().item()):.4f}.pt")
         scheduler.step()
 
 
