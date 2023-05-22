@@ -28,6 +28,6 @@ def evaluate(dataloader,
             if compute_loss:
                 loss = compute_loss([x.float() for x in train_out], targets)[1][:3]
                 mean_loss = (mean_loss * bi + loss) / (bi + 1)
-        break
+        
 
     return mean_loss.mean()
